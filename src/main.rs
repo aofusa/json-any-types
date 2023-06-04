@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(untagged)]
 enum Json {
     Int(i32),
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn test_array() {
-         let s = r#"[0, 1]"#;
+        let s = r#"[0, 1]"#;
         let j: Json = serde_json::from_str(&s).unwrap();
         assert_eq!(Json::Array(vec![Json::Int(0), Json::Int(1)]), j);
     }
@@ -139,5 +139,151 @@ mod tests {
 
         println!("{:?}", a);
         println!("{}", b);
+    }
+
+    #[test]
+    fn test_get() {
+        let data = r#"
+        {
+            "version": "1.0.0",
+            "meta": {
+                "date": "2023-6-1",
+                "author": "aofusa",
+                "license": "apache 2.0"
+            },
+            "datalist": [
+                {
+                    "name": "name1",
+                    "components": [
+                        {
+                            "name": "component1",
+                            "plugins": [
+                            {
+                                "name": "plugin1",
+                                "args": ["arg1", "arg2"]
+                            }
+                            ]
+                        },
+                        {
+                            "name": "component2",
+                            "plugins": []
+                        }
+                    ]
+                },
+                {
+                    "name": "name2",
+                    "components": [
+                        1,
+                        2,
+                        3
+                    ]
+                }
+            ],
+            "specs": {
+                "data1": {},
+                "data2": {},
+                "data3": {}
+            }
+        }
+        "#;
+    
+        let json: Json = serde_json::from_str(&data).unwrap();
+    
+        if let Json::Object(x) = &json {
+            let version = x.get("version").unwrap();
+            assert_eq!(&Json::String("1.0.0".to_string()), version);
+        };
+    
+        if let Json::Object(x) = &json {
+            let meta = x.get("meta").unwrap();
+            if let Json::Object(y) = &meta {
+                let author = y.get("author").unwrap();
+                assert_eq!(&Json::String("aofusa".to_string()), author);
+            }
+        };
+    
+        if let Json::Object(x) = &json {
+            let datalist = x.get("datalist").unwrap();
+            if let Json::Array(y) = &datalist {
+                let datalist_1 = &y[1];
+                assert_eq!(&Json::Object(HashMap::from([("name".to_string(), Json::String("name2".to_string())), ("components".to_string(), Json::Array(vec![Json::Int(1), Json::Int(2), Json::Int(3)]))])), datalist_1);
+            }
+        };
+    }
+
+    #[test]
+    fn test_set() {
+        let data = r#"
+        {
+            "version": "1.0.0",
+            "meta": {
+                "date": "2023-6-1",
+                "author": "aofusa",
+                "license": "apache 2.0"
+            },
+            "datalist": [
+                {
+                    "name": "name1",
+                    "components": [
+                        {
+                            "name": "component1",
+                            "plugins": [
+                            {
+                                "name": "plugin1",
+                                "args": ["arg1", "arg2"]
+                            }
+                            ]
+                        },
+                        {
+                            "name": "component2",
+                            "plugins": []
+                        }
+                    ]
+                },
+                {
+                    "name": "name2",
+                    "components": [
+                        1,
+                        2,
+                        3
+                    ]
+                }
+            ],
+            "specs": {
+                "data1": {},
+                "data2": {},
+                "data3": {}
+            }
+        }
+        "#;
+    
+        let json: Json = serde_json::from_str(&data).unwrap();
+
+        if let Json::Object(x) = &json {
+            let meta = x.get("meta").unwrap();
+            if let Json::Object(y) = &meta {
+                let license = y.get("license").unwrap();
+                assert_eq!(&Json::String("apache 2.0".to_string()), license);
+            }
+        };
+
+        let json = {
+            let mut t = json.clone();
+            if let Json::Object(ref mut x) = t {
+                let meta = x.get_mut("meta").unwrap();
+                if let Json::Object(ref mut y) = meta {
+                    y.insert("license".to_string(), Json::String("mit".to_string()));
+                }
+            };
+            t
+        };
+
+        if let Json::Object(x) = &json {
+            let meta = x.get("meta").unwrap();
+            if let Json::Object(y) = &meta {
+                let license = y.get("license").unwrap();
+                assert_eq!(&Json::String("mit".to_string()), license);
+            }
+        };
     }
 }
