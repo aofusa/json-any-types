@@ -4,6 +4,9 @@ use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 
+type JsonArray = Vec<Json>;
+type JsonObject = HashMap<String, Json>;
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(untagged)]
 enum Json {
@@ -14,6 +17,30 @@ enum Json {
     Array(Vec<Json>),
     Object(HashMap<String, Json>),
     None,
+}
+
+impl Json {
+    fn from<T: Serialize>(x: &T) -> Result<Self, Box<dyn Error>> {
+        let s = serde_json::to_string(x)?;
+        let j: Self = serde_json::from_str(&s)?;
+        Ok(j)
+    }
+
+    fn from_str(x: &str) -> Result<Self, Box<dyn Error>> {
+        let j: Self = serde_json::from_str(x)?;
+        Ok(j)
+    }
+
+    fn to<T: for<'de> Deserialize<'de>>(self: &Self) -> Result<T, Box<dyn Error>> {
+        let s = serde_json::to_string(self)?;
+        let t: T = serde_json::from_str(&s)?;
+        Ok(t)
+    }
+
+    fn to_string(self: &Self) -> Result<String, Box<dyn Error>> {
+        let s = serde_json::to_string(self)?;
+        Ok(s)
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>>{
@@ -186,14 +213,14 @@ mod tests {
             }
         }
         "#;
-    
+
         let json: Json = serde_json::from_str(&data).unwrap();
-    
+
         if let Json::Object(x) = &json {
             let version = x.get("version").unwrap();
             assert_eq!(&Json::String("1.0.0".to_string()), version);
         };
-    
+
         if let Json::Object(x) = &json {
             let meta = x.get("meta").unwrap();
             if let Json::Object(y) = &meta {
@@ -201,7 +228,7 @@ mod tests {
                 assert_eq!(&Json::String("aofusa".to_string()), author);
             }
         };
-    
+
         if let Json::Object(x) = &json {
             let datalist = x.get("datalist").unwrap();
             if let Json::Array(y) = &datalist {
@@ -256,7 +283,7 @@ mod tests {
             }
         }
         "#;
-    
+
         let json: Json = serde_json::from_str(&data).unwrap();
 
         if let Json::Object(x) = &json {
@@ -285,5 +312,76 @@ mod tests {
                 assert_eq!(&Json::String("mit".to_string()), license);
             }
         };
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Point {
+        x: i32,
+        y: i32,
+    }
+
+    #[test]
+    fn test_struct() {
+        let point_struct = Point { x: 1, y: 2};
+        let point_str = serde_json::to_string(&point_struct).unwrap();
+        let point_json: Json = serde_json::from_str(&point_str).unwrap();
+        assert_eq!(r#"{"x":1,"y":2}"#, &point_str);
+        assert_eq!(Json::Object(HashMap::from([("x".to_string(), Json::Int(1)), ("y".to_string(), Json::Int(2))])), point_json);
+    }
+
+    #[test]
+    fn test_from() {
+        let point_struct = Point { x: 1, y: 2};
+        let point_json = Json::from(&point_struct).unwrap();
+        assert_eq!(Json::Object(HashMap::from([("x".to_string(), Json::Int(1)), ("y".to_string(), Json::Int(2))])), point_json);
+    }
+
+    #[test]
+    fn test_from_str() {
+        let point_str = r#"{"x":1,"y":2}"#;
+        let point_json = Json::from_str(&point_str).unwrap();
+        assert_eq!(Json::Object(HashMap::from([("x".to_string(), Json::Int(1)), ("y".to_string(), Json::Int(2))])), point_json);
+    }
+
+    #[test]
+    fn test_to() {
+        let point_json = Json::Object(HashMap::from([("x".to_string(), Json::Int(1)), ("y".to_string(), Json::Int(2))]));
+        let point_struct: Point = point_json.to().unwrap();
+        assert_eq!(Point { x: 1, y: 2}, point_struct);
+    }
+
+    #[test]
+    fn test_to_string() {
+        let point_json = Json::Object(HashMap::from([("x".to_string(), Json::Int(1)), ("y".to_string(), Json::Int(2))]));
+        let _point_str = point_json.to_string().unwrap();
+        // assert_eq!(r#"{"x":1,"y":2}"#, &point_str);
+    }
+
+    #[test]
+    fn test_get_object() {
+        let point_struct = Point { x: 1, y: 2};
+        let point_json = Json::from(&point_struct).unwrap();
+
+        let o = point_json.to::<JsonObject>().unwrap();
+
+        let x = o.get("x");
+        assert_eq!(Some(&Json::Int(1)), x);
+
+        let z = o.get("z");
+        assert_eq!(None, z);
+    }
+
+    #[test]
+    fn test_get_array() {
+        let data = vec![0, 1, 2];
+        let j = Json::from(&data).unwrap();
+
+        let a = j.to::<JsonArray>().unwrap();
+
+        let x1 = a.get(1);
+        assert_eq!(Some(&Json::Int(1)), x1);
+
+        let x2 = a.get(3);
+        assert_eq!(None, x2);
     }
 }
